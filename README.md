@@ -93,3 +93,77 @@ domain             1      11m
 kube-root-ca.crt   1      50d
 nginx-config       1      8s
 ```
+
+
+# Задача 2 (*): Работа с картами конфигураций внутри модуля
+
+впишем созданную выше конфиг-мапу nginx-config в деплоймент:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: permitted
+  name: permitted
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: permitted
+  template:
+    metadata:
+      labels:
+        app: permitted
+    spec:
+      containers:
+        - image: praqma/network-multitool:alpine-extra
+          imagePullPolicy: IfNotPresent
+          name: multitool
+          env:
+          - name: ENVCONFIG_ENV
+            valueFrom:
+              configMapKeyRef:
+                name: nginx-config
+                key: nginx.conf
+          volumeMounts:
+          - name: foo
+            mountPath: "/etc/foo"
+            readOnly: true
+      volumes:
+        - name: foo
+          configMap:
+            name: nginx-config      
+```
+теперь попробуем прочитать конфиг из пода:
+
+```shell
+bash-5.1# echo "$ENVCONFIG_ENV"
+server {
+    listen 80;
+    server_name  netology.ru www.netology.ru;
+    access_log  /var/log/nginx/domains/netology.ru-access.log  main;
+    error_log   /var/log/nginx/domains/netology.ru-error.log info;
+    location / {
+        include proxy_params;
+        proxy_pass http://10.10.10.10:8080/;
+    }
+}
+bash-5.1#
+bash-5.1#
+bash-5.1# ls -l /etc/foo/nginx.conf
+lrwxrwxrwx    1 root     root            17 Dec  7 14:06 /etc/foo/nginx.conf -> ..data/nginx.conf
+bash-5.1# cat /etc/foo/nginx.conf
+server {
+    listen 80;
+    server_name  netology.ru www.netology.ru;
+    access_log  /var/log/nginx/domains/netology.ru-access.log  main;
+    error_log   /var/log/nginx/domains/netology.ru-error.log info;
+    location / {
+        include proxy_params;
+        proxy_pass http://10.10.10.10:8080/;
+    }
+}
+bash-5.1#
+```
+Убедились в корректной работе.
